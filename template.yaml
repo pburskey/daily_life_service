@@ -1,0 +1,188 @@
+AWSTemplateFormatVersion: 2010-09-09
+Transform: AWS::Serverless-2016-10-31
+Description: dailylife
+
+
+Parameters:
+  Stage:
+    Type: String
+    Description: The stage where the application is running in, e.g., dev, prod.
+    Default: 'dev'
+    AllowedValues:
+      - dev
+      - stage
+      - prod
+
+Conditions:
+  IsProd:
+    !Equals [ !Ref Stage, "prod" ]
+  IsDev:
+    Fn::Equals:
+      - 'dev'
+      - !Ref Stage
+
+
+Globals:
+  Function:
+    Runtime: java17
+    MemorySize: 512
+    Timeout: 3
+    Environment:
+      Variables:
+        PARTY_TABLE: !Ref PartyTable
+        COMMUNICATION_TABLE: !Ref CommunicationTable
+        STAGE: !Ref Stage
+
+Resources:
+  PartyTable:
+    Type: AWS::DynamoDB::Table
+    Properties:
+      ProvisionedThroughput:
+        ReadCapacityUnits: '5'
+        WriteCapacityUnits: '5'
+      AttributeDefinitions:
+        -
+          AttributeName: "id"
+          AttributeType: "S"
+      KeySchema:
+        -
+          AttributeName: "id"
+          KeyType: "HASH"
+
+  CommunicationTable:
+    Type: AWS::DynamoDB::Table
+    Properties:
+      ProvisionedThroughput:
+        ReadCapacityUnits: '5'
+        WriteCapacityUnits: '5'
+      AttributeDefinitions:
+        -
+          AttributeName: "party_id"
+          AttributeType: "S"
+        -
+          AttributeName: "id"
+          AttributeType: "S"
+      KeySchema:
+        -
+          AttributeName: "party_id"
+          KeyType: "HASH"
+        -
+          AttributeName: "id"
+          KeyType: "RANGE"
+
+
+  BasicAWSApiGateway:
+    Type: AWS::Serverless::Api
+    Properties:
+      Name: Basic AWS Api Gateway
+      Description: Basic AWS Api Gateway
+      OpenApiVersion: 3.0.1
+      StageName: !Ref Stage
+      DisableExecuteApiEndpoint: false
+
+  PartyFindByIDLambda:
+    Type: AWS::Serverless::Function
+    Properties:
+      CodeUri: target/lambda.zip
+      FunctionName: PartyFindByIDLambda
+      Handler: com.burskey.dailylife.party.api.PartyGetByID::handleRequest
+      Policies:
+        - DynamoDBReadPolicy:
+            TableName: !Ref PartyTable
+      Events:
+        ApiEvent:
+          Type: Api
+          Properties:
+            RestApiId: !Ref BasicAWSApiGateway
+            Path: /party/{id}
+            Method: get
+            RequestParameters:
+              - method.request.path.id:
+                  Required: true
+                  Caching: false
+
+  PartySaveLambda:
+    Type: AWS::Serverless::Function
+    Properties:
+      CodeUri: target/lambda.zip
+      FunctionName: PartySaveLambda
+      Handler: com.burskey.dailylife.party.api.PartySave::handleRequest
+      Policies:
+        - DynamoDBCrudPolicy:
+            TableName: !Ref PartyTable
+      Events:
+        ApiEvents:
+          Type: Api
+          Properties:
+            RestApiId: !Ref BasicAWSApiGateway
+            Path: /party
+            Method: POST
+
+
+  PartyCommunicationFindByIDLambda:
+    Type: AWS::Serverless::Function
+    Properties:
+      CodeUri: target/lambda.zip
+      FunctionName: PartyCommunicationFindByIDLambda
+      Handler: com.burskey.dailylife.party.api.CommunicationGetByID::handleRequest
+      Policies:
+        - DynamoDBReadPolicy:
+            TableName: !Ref CommunicationTable
+      Events:
+        ApiEvent:
+          Type: Api
+          Properties:
+            RestApiId: !Ref BasicAWSApiGateway
+            Path: /party/communication/{partyid}/{communication_id}
+            Method: get
+
+  CommunicationSaveLambda:
+    Type: AWS::Serverless::Function
+    Properties:
+      CodeUri: target/lambda.zip
+      FunctionName: CommunicationSaveLambda
+      Handler: com.burskey.dailylife.party.api.CommunicationSave::handleRequest
+      Policies:
+        - DynamoDBCrudPolicy:
+            TableName: !Ref CommunicationTable
+      Events:
+        ApiEvents:
+          Type: Api
+          Properties:
+            RestApiId: !Ref BasicAWSApiGateway
+            Path: /party/communication
+            Method: POST
+
+
+  PartyCommunicationFindByPartyLambda:
+    Type: AWS::Serverless::Function
+    Properties:
+      CodeUri: target/lambda.zip
+      FunctionName: PartyCommunicationFindByPartyLambda
+      Handler: com.burskey.dailylife.party.api.CommunicationsGetByParty::handleRequest
+      Policies:
+        - DynamoDBReadPolicy:
+            TableName: !Ref CommunicationTable
+      Events:
+        ApiEvent:
+          Type: Api
+          Properties:
+            RestApiId: !Ref BasicAWSApiGateway
+            Path: /party/communications/{partyid}
+            Method: get
+
+
+
+Outputs:
+  BasicAWSApiGateway:
+    Description: 'API Gateway endpoint URL'
+    Value: !Sub 'https://${BasicAWSApiGateway}.execute-api.${AWS::Region}.amazonaws.com/${Stage}'
+  BasicAWSApiGatewayRestApiId:
+    Description: 'API Gateway ARN for Basic AWS API Gateway'
+    Value: !Ref BasicAWSApiGateway
+    Export:
+      Name: BasicAWSApiGateway-RestApiId
+  BasicAWSApiGatewayRootResourceId:
+    Value: !GetAtt BasicAWSApiGateway.RootResourceId
+    Export:
+      Name: BasicAWSApiGateway-RootResourceId

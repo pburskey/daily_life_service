@@ -1,0 +1,17 @@
+default:
+  global:
+    parameters:
+      s3_bucket: pburskey-home
+      stack_name: dailylife
+  deploy:
+    parameters:
+      resolve_s3: false
+      s3_prefix: dailylife
+      region: us-east-2
+      confirm_changeset: false
+      capabilities: CAPABILITY_IAM
+      parameter_overrides: Environment="dev"
+      image_repositories: []
+
+
+version: 0.1
