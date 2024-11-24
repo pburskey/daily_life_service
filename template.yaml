@@ -74,7 +74,7 @@ Resources:
   BasicAWSApiGateway:
     Type: AWS::Serverless::Api
     Properties:
-      Name: Basic AWS Api Gateway
+      Name: Daily Life AWS Api Gateway
       Description: Basic AWS Api Gateway
       OpenApiVersion: 3.0.1
       StageName: !Ref Stage
