@@ -31,6 +31,7 @@ Globals:
       Variables:
         PARTY_TABLE: !Ref PartyTable
         COMMUNICATION_TABLE: !Ref CommunicationTable
+        TASK_TABLE: !Ref TaskTable
         STAGE: !Ref Stage
 
 Resources:
@@ -38,8 +39,8 @@ Resources:
     Type: AWS::DynamoDB::Table
     Properties:
       ProvisionedThroughput:
-        ReadCapacityUnits: '5'
-        WriteCapacityUnits: '5'
+        ReadCapacityUnits: '1'
+        WriteCapacityUnits: '1'
       AttributeDefinitions:
         -
           AttributeName: "id"
@@ -53,8 +54,8 @@ Resources:
     Type: AWS::DynamoDB::Table
     Properties:
       ProvisionedThroughput:
-        ReadCapacityUnits: '5'
-        WriteCapacityUnits: '5'
+        ReadCapacityUnits: '1'
+        WriteCapacityUnits: '1'
       AttributeDefinitions:
         -
           AttributeName: "party_id"
@@ -69,6 +70,28 @@ Resources:
         -
           AttributeName: "id"
           KeyType: "RANGE"
+
+  TaskTable:
+    Type: AWS::DynamoDB::Table
+    Properties:
+      ProvisionedThroughput:
+        ReadCapacityUnits: '1'
+        WriteCapacityUnits: '1'
+      AttributeDefinitions:
+        -
+          AttributeName: "party_id"
+          AttributeType: "S"
+        -
+          AttributeName: "id"
+          AttributeType: "S"
+      KeySchema:
+        -
+          AttributeName: "party_id"
+          KeyType: "HASH"
+        -
+          AttributeName: "id"
+          KeyType: "RANGE"
+
 
 
   BasicAWSApiGateway:
@@ -171,7 +194,40 @@ Resources:
             Path: /party/communications/{partyid}
             Method: get
 
+  TaskSaveLambda:
+    Type: AWS::Serverless::Function
+    Properties:
+      CodeUri: target/lambda.zip
+      FunctionName: TaskSaveLambda
+      Handler: com.burskey.dailylife.task.api.TaskSave::handleRequest
+      Policies:
+        - DynamoDBCrudPolicy:
+            TableName: !Ref TaskTable
+      Events:
+        ApiEvents:
+          Type: Api
+          Properties:
+            RestApiId: !Ref BasicAWSApiGateway
+            Path: /party/task
+            Method: POST
 
+
+  TaskFindByIDLambda:
+    Type: AWS::Serverless::Function
+    Properties:
+      CodeUri: target/lambda.zip
+      FunctionName: TaskFindByIDLambda
+      Handler: com.burskey.dailylife.task.api.TaskGetByID::handleRequest
+      Policies:
+        - DynamoDBReadPolicy:
+            TableName: !Ref TaskTable
+      Events:
+        ApiEvent:
+          Type: Api
+          Properties:
+            RestApiId: !Ref BasicAWSApiGateway
+            Path: /party/task/{partyid}/{task_id}
+            Method: get
 
 Outputs:
   BasicAWSApiGateway:
