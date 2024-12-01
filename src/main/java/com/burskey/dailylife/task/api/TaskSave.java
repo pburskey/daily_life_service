@@ -4,6 +4,7 @@ import com.amazonaws.services.lambda.runtime.Context;
 import com.amazonaws.services.lambda.runtime.LambdaLogger;
 import com.amazonaws.services.lambda.runtime.events.APIGatewayProxyRequestEvent;
 import com.amazonaws.services.lambda.runtime.events.APIGatewayProxyResponseEvent;
+import com.burskey.dailylife.task.domain.SimpleTask;
 import com.burskey.dailylife.task.domain.Task;
 import com.burskey.dailylife.task.service.TaskService;
 import jakarta.validation.ConstraintViolationException;
@@ -31,7 +32,7 @@ public class TaskSave extends AbstractLambda {
         try {
 
             if (event != null && event.getBody() != null && !event.getBody().isEmpty()) {
-                Task task = this.getMapper().readValue(event.getBody(), Task.class);
+                Task task = this.getMapper().readValue(event.getBody(), SimpleTask.class);
 
                 if (task == null ) {
                     response.setStatusCode(HttpStatus.SC_BAD_REQUEST);
