@@ -229,6 +229,25 @@ Resources:
             Path: /party/task/{partyid}/{task_id}
             Method: get
 
+
+  TaskFindByPartyIDLambda:
+    Type: AWS::Serverless::Function
+    Properties:
+      CodeUri: target/lambda.zip
+      FunctionName: TaskFindByPartyIDLambda
+      Handler: com.burskey.dailylife.task.api.TaskGetByPartyID::handleRequest
+      Policies:
+        - DynamoDBReadPolicy:
+            TableName: !Ref TaskTable
+      Events:
+        ApiEvent:
+          Type: Api
+          Properties:
+            RestApiId: !Ref BasicAWSApiGateway
+            Path: /party/tasks/{partyid}
+            Method: get
+
+
 Outputs:
   BasicAWSApiGateway:
     Description: 'API Gateway endpoint URL'

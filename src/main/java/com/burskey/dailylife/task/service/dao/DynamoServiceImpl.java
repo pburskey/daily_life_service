@@ -48,7 +48,8 @@ public class DynamoServiceImpl implements TaskService {
         Task task = null;
 
         GetItemSpec spec = new GetItemSpec();
-        spec.withPrimaryKey("id", id);
+        spec.withPrimaryKey("id", id,"party_id", partyId);
+        System.out.println("Using table name: " + taskTableName);
         final Table table = this.dynamoDB.getTable(this.taskTableName);
         Item item = table.getItem(spec);
 
@@ -63,6 +64,11 @@ public class DynamoServiceImpl implements TaskService {
         }
 
         return task;
+    }
+
+    @Override
+    public Task[] getTasksByParty(String s) {
+        return new Task[0];
     }
 
     @Override

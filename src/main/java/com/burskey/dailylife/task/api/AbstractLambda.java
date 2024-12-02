@@ -14,7 +14,7 @@ public abstract class AbstractLambda {
 
 
     private TaskService service = null;
-    private String ENV_TASK_TABLE = "";
+    private String ENV_TASK_TABLE = "TASK_TABLE";
 
 
     protected final ObjectMapper mapper = new ObjectMapper().

@@ -4,20 +4,18 @@ import com.amazonaws.services.lambda.runtime.Context;
 import com.amazonaws.services.lambda.runtime.LambdaLogger;
 import com.amazonaws.services.lambda.runtime.events.APIGatewayProxyRequestEvent;
 import com.amazonaws.services.lambda.runtime.events.APIGatewayProxyResponseEvent;
-import com.burskey.dailylife.task.domain.SimpleTask;
 import com.burskey.dailylife.task.domain.Task;
 import com.burskey.dailylife.task.service.TaskService;
-import jakarta.validation.ConstraintViolationException;
 import org.apache.http.HttpStatus;
 
-public class TaskSave extends AbstractLambda {
+public class TaskGetByPartyID extends AbstractLambda {
 
 
-    public TaskSave() {
+    public TaskGetByPartyID() {
         super();
     }
 
-    public TaskSave(TaskService dao) {
+    public TaskGetByPartyID(TaskService dao) {
         super(dao);
     }
 
@@ -31,31 +29,24 @@ public class TaskSave extends AbstractLambda {
         response.setStatusCode(200);
         try {
 
-            if (event != null && event.getBody() != null && !event.getBody().isEmpty()) {
-                Task task = this.getMapper().readValue(event.getBody(), SimpleTask.class);
-
-                if (task == null ) {
+            if (event != null && event.getPathParameters() != null) {
+                String partyId = event.getPathParameters().get("partyid");
+                if (partyId == null || partyId.isEmpty()) {
                     response.setStatusCode(HttpStatus.SC_BAD_REQUEST);
-                    response.setBody("Missing task");
+                    response.setBody("Missing party id");
                 } else {
 
 
-                    logger.log("Saving task: ");
-                    task = this.getService().saveTask(task);
-                    if (task != null) {
-                        response.setBody(this.getMapper().writeValueAsString(task));
+                    logger.log("Searching for tasks on party: " + partyId);
+                    Task[] tasks = this.getService().getTasksByParty(partyId);
+                    if (tasks != null) {
+                        response.setBody(this.getMapper().writeValueAsString(tasks));
                     }
-
                 }
+
             }
 
-        }
-        catch (ConstraintViolationException e) {
-            logger.log(e.getMessage());
-            response.setBody(e.getMessage());
-            response.setStatusCode(HttpStatus.SC_BAD_REQUEST);
-        }
-        catch (Exception e) {
+        } catch (Exception e) {
             logger.log(e.getMessage());
             response.setBody(e.getMessage());
             response.setStatusCode(HttpStatus.SC_INTERNAL_SERVER_ERROR);
