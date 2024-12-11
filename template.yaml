@@ -32,6 +32,7 @@ Globals:
         PARTY_TABLE: !Ref PartyTable
         COMMUNICATION_TABLE: !Ref CommunicationTable
         TASK_TABLE: !Ref TaskTable
+        TASK_IN_PROGRESS_TABLE: !Ref TaskInProgressTable
         STAGE: !Ref Stage
 
 Resources:
@@ -42,12 +43,10 @@ Resources:
         ReadCapacityUnits: '1'
         WriteCapacityUnits: '1'
       AttributeDefinitions:
-        -
-          AttributeName: "id"
+        - AttributeName: "id"
           AttributeType: "S"
       KeySchema:
-        -
-          AttributeName: "id"
+        - AttributeName: "id"
           KeyType: "HASH"
 
   CommunicationTable:
@@ -57,19 +56,17 @@ Resources:
         ReadCapacityUnits: '1'
         WriteCapacityUnits: '1'
       AttributeDefinitions:
-        -
-          AttributeName: "party_id"
+        - AttributeName: "party_id"
           AttributeType: "S"
-        -
-          AttributeName: "id"
+        - AttributeName: "id"
           AttributeType: "S"
       KeySchema:
-        -
-          AttributeName: "party_id"
+        - AttributeName: "party_id"
           KeyType: "HASH"
-        -
-          AttributeName: "id"
+        - AttributeName: "id"
           KeyType: "RANGE"
+
+
 
   TaskTable:
     Type: AWS::DynamoDB::Table
@@ -78,18 +75,32 @@ Resources:
         ReadCapacityUnits: '1'
         WriteCapacityUnits: '1'
       AttributeDefinitions:
-        -
-          AttributeName: "party_id"
+        - AttributeName: "id"
           AttributeType: "S"
-        -
-          AttributeName: "id"
+        - AttributeName: "party_id"
           AttributeType: "S"
       KeySchema:
-        -
-          AttributeName: "party_id"
+        - AttributeName: "party_id"
           KeyType: "HASH"
-        -
-          AttributeName: "id"
+        - AttributeName: "id"
+          KeyType: "RANGE"
+
+
+  TaskInProgressTable:
+    Type: AWS::DynamoDB::Table
+    Properties:
+      ProvisionedThroughput:
+        ReadCapacityUnits: '1'
+        WriteCapacityUnits: '1'
+      AttributeDefinitions:
+        - AttributeName: "id"
+          AttributeType: "S"
+        - AttributeName: "task_id"
+          AttributeType: "S"
+      KeySchema:
+        - AttributeName: "task_id"
+          KeyType: "HASH"
+        - AttributeName: "id"
           KeyType: "RANGE"
 
 
@@ -246,6 +257,44 @@ Resources:
             RestApiId: !Ref BasicAWSApiGateway
             Path: /party/tasks/{partyid}
             Method: get
+
+
+
+  TaskInProgressSaveLambda:
+    Type: AWS::Serverless::Function
+    Properties:
+      CodeUri: target/lambda.zip
+      FunctionName: TaskInProgressSaveLambda
+      Handler: com.burskey.dailylife.task.api.TaskInProgressHandler::handleRequestSave
+      Policies:
+        - DynamoDBCrudPolicy:
+            TableName: !Ref TaskInProgressTable
+      Events:
+        ApiEvents:
+          Type: Api
+          Properties:
+            RestApiId: !Ref BasicAWSApiGateway
+            Path: /party/tasksinprogress
+            Method: POST
+
+
+
+  TaskInProgressGetByTaskLambda:
+    Type: AWS::Serverless::Function
+    Properties:
+      CodeUri: target/lambda.zip
+      FunctionName: TaskInProgressGetByTaskLambda
+      Handler: com.burskey.dailylife.task.api.TaskInProgressHandler::handleRequestGetByTask
+      Policies:
+        - DynamoDBReadPolicy:
+            TableName: !Ref TaskInProgressTable
+      Events:
+        ApiEvents:
+          Type: Api
+          Properties:
+            RestApiId: !Ref BasicAWSApiGateway
+            Path: /party/task/{partyid}/{task_id}/tasksinprogress
+            Method: GET
 
 
 Outputs:

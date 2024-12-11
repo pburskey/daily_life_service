@@ -2,17 +2,16 @@ package com.burskey.dailylife.task.service.dao;
 
 import com.amazonaws.services.dynamodbv2.AmazonDynamoDB;
 import com.amazonaws.services.dynamodbv2.AmazonDynamoDBClientBuilder;
-import com.amazonaws.services.dynamodbv2.document.DynamoDB;
-import com.amazonaws.services.dynamodbv2.document.Item;
-import com.amazonaws.services.dynamodbv2.document.Table;
+import com.amazonaws.services.dynamodbv2.document.*;
 import com.amazonaws.services.dynamodbv2.document.spec.GetItemSpec;
+import com.amazonaws.services.dynamodbv2.document.spec.QuerySpec;
+import com.amazonaws.services.dynamodbv2.document.utils.ValueMap;
 import com.amazonaws.services.dynamodbv2.model.AttributeValue;
 import com.amazonaws.services.dynamodbv2.model.UpdateItemRequest;
 import com.amazonaws.services.dynamodbv2.model.UpdateItemResult;
-import com.burskey.dailylife.task.domain.SimpleTask;
-import com.burskey.dailylife.task.domain.StatusPoint;
-import com.burskey.dailylife.task.domain.Task;
-import com.burskey.dailylife.task.domain.TaskInProgress;
+import com.burskey.dailylife.party.domain.Communication;
+import com.burskey.dailylife.party.service.ServiceException;
+import com.burskey.dailylife.task.domain.*;
 import com.burskey.dailylife.task.service.TaskService;
 import com.fasterxml.jackson.annotation.JsonInclude;
 import com.fasterxml.jackson.core.JsonProcessingException;
@@ -20,8 +19,7 @@ import com.fasterxml.jackson.databind.DeserializationFeature;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import com.fasterxml.jackson.databind.SerializationFeature;
 
-import java.util.Map;
-import java.util.UUID;
+import java.util.*;
 
 
 public class DynamoServiceImpl implements TaskService {
@@ -35,11 +33,12 @@ public class DynamoServiceImpl implements TaskService {
             .setSerializationInclusion(JsonInclude.Include.NON_NULL);
 
     private String taskTableName;
+    private String taskInProgressTableName;
 
 
-    public DynamoServiceImpl(String ataskTableName) {
+    public DynamoServiceImpl(String ataskTableName, String atipTableName) {
         this.taskTableName = ataskTableName;
-
+        this.taskInProgressTableName = atipTableName;
     }
 
 
@@ -109,12 +108,86 @@ public class DynamoServiceImpl implements TaskService {
 
 
     @Override
-    public TaskInProgress save(TaskInProgress taskInProgress) {
-        return null;
+    public TaskInProgress saveTaskInProgress(TaskInProgress taskInProgress) {
+        if (taskInProgress != null) {
+            try {
+                SimpleTaskInProgress castTip = (SimpleTaskInProgress) taskInProgress;
+
+                if (taskInProgress.getID() == null || taskInProgress.getID().isEmpty()) {
+                    castTip.setId(UUID.randomUUID().toString());
+                    String json = mapper.writeValueAsString(castTip);
+                    final Item item = new Item()
+                            .withPrimaryKey("id", taskInProgress.getID(), "task_id", taskInProgress.getTaskID())
+                            .withString("details", json);
+
+                    final Table table = this.dynamoDB.getTable(this.taskInProgressTableName);
+                    table.putItem(item);
+
+                } else {
+                    String json = mapper.writeValueAsString(taskInProgress);
+                    UpdateItemRequest updateItemRequest = new UpdateItemRequest();
+                    updateItemRequest.setTableName(this.taskInProgressTableName);
+                    updateItemRequest.addKeyEntry("id", new AttributeValue().withS(taskInProgress.getID()));
+                    updateItemRequest.addExpressionAttributeValuesEntry(":details", new AttributeValue().withS(json));
+                    updateItemRequest.addExpressionAttributeValuesEntry(":task_id", new AttributeValue().withS(taskInProgress.getTaskID()));
+                    updateItemRequest.withUpdateExpression("set details = :details, task_id = :task_id");
+
+                    UpdateItemResult result = this.client.updateItem(updateItemRequest);
+
+                }
+            } catch (Exception e) {
+                System.err.println("Error updating item: " + e.getMessage());
+            }
+        }
+
+        return taskInProgress;
     }
 
     @Override
-    public StatusPoint[] getStatusPoints(String s) {
+    public StatusPoint[] getStatusPoints(String taskInProgressId) {
         return new StatusPoint[0];
+    }
+
+    @Override
+    public TaskInProgress[] getByTask(String partyId, String taskId) {
+        List<TaskInProgress> aList = new ArrayList<>();
+
+        ValueMap valueMap = new ValueMap();
+        valueMap.withString(":taskID", taskId);
+
+
+        QuerySpec querySpec = new QuerySpec()
+                .withKeyConditionExpression("task_id = :taskID ")
+                .withValueMap(valueMap)
+                .withConsistentRead(true);
+
+        ItemCollection<QueryOutcome> outcomes= this.dynamoDB.getTable(this.taskInProgressTableName).query(querySpec);
+
+        if (outcomes != null) {
+
+            for (Iterator iterator = outcomes.iterator(); iterator.hasNext();){
+                Item outcome = (Item) iterator.next();
+                String json = (String) outcome.get("details");
+                TaskInProgress aTip = null;
+                try {
+                    aTip = this.mapper.readValue(json, TaskInProgress.class);
+                } catch (JsonProcessingException e) {
+                    throw new ServiceException("Encountered problem trying to rehydrate a task in progress", e);
+                }
+
+                aList.add(aTip);
+            }
+        }
+
+        TaskInProgress[] tips = null;
+        if (aList != null && aList.size() > 0) {
+            tips = aList.toArray(new TaskInProgress[aList.size()]);
+        }
+        return tips;
+    }
+
+    @Override
+    public TaskInProgress[] getByParty(String partyId) {
+        return new TaskInProgress[0];
     }
 }

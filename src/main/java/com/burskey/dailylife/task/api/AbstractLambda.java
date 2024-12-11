@@ -15,6 +15,7 @@ public abstract class AbstractLambda {
 
     private TaskService service = null;
     private String ENV_TASK_TABLE = "TASK_TABLE";
+    private String ENV_TASK_IN_PROGRESS_TABLE = "TASK_IN_PROGRESS_TABLE";
 
 
     protected final ObjectMapper mapper = new ObjectMapper().
@@ -25,7 +26,8 @@ public abstract class AbstractLambda {
     public AbstractLambda() {
 
         String taskTableName = System.getenv(ENV_TASK_TABLE);
-        this.service = new TaskServiceImpl(new DynamoServiceImpl(taskTableName));
+        String tipTableName = System.getenv(ENV_TASK_IN_PROGRESS_TABLE);
+        this.service = new TaskServiceImpl(new DynamoServiceImpl(taskTableName, tipTableName));
     }
 
 
