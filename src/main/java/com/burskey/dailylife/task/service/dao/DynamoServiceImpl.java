@@ -46,7 +46,7 @@ public class DynamoServiceImpl implements TaskService {
     public Task getTask( String id) {
         Task task = null;
 
-
+        System.out.println("Getting task: " + id);
         ValueMap valueMap = new ValueMap();
         valueMap.withString(":taskID", id);
 
@@ -70,7 +70,7 @@ public class DynamoServiceImpl implements TaskService {
 //            }
 //        }
 
-        ItemCollection<QueryOutcome> outcomes= this.dynamoDB.getTable(this.taskInProgressTableName).query(querySpec);
+        ItemCollection<QueryOutcome> outcomes= this.dynamoDB.getTable(this.taskTableName).query(querySpec);
 
         if (outcomes != null) {
 
@@ -85,7 +85,7 @@ public class DynamoServiceImpl implements TaskService {
                 }
             }
         }
-
+        System.out.println("Completed Getting task: " + id);
         return task;
     }
 
@@ -102,6 +102,7 @@ public class DynamoServiceImpl implements TaskService {
 
                 if (task.getId() == null || task.getId().isEmpty()) {
                     castTask.setId(UUID.randomUUID().toString());
+                    System.out.println("Inserting new Task: " + castTask.getId());
                     String json = mapper.writeValueAsString(task);
                     final Item item = new Item()
                             .withPrimaryKey("id", task.getId(), "party_id", task.getPartyID())
@@ -109,6 +110,7 @@ public class DynamoServiceImpl implements TaskService {
 
                     final Table table = this.dynamoDB.getTable(this.taskTableName);
                     table.putItem(item);
+                    System.out.println("Completed insertion of Task: " + castTask.getId());
 
                 } else {
                     String json = mapper.writeValueAsString(task);

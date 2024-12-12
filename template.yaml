@@ -210,7 +210,7 @@ Resources:
     Properties:
       CodeUri: target/lambda.zip
       FunctionName: TaskSaveLambda
-      Handler: com.burskey.dailylife.task.api.TaskSave::handleRequest
+      Handler: com.burskey.dailylife.task.api.TaskHandler::handleRequest_save
       Policies:
         - DynamoDBCrudPolicy:
             TableName: !Ref TaskTable
@@ -228,7 +228,7 @@ Resources:
     Properties:
       CodeUri: target/lambda.zip
       FunctionName: TaskFindByIDLambda
-      Handler: com.burskey.dailylife.task.api.TaskGetByID::handleRequest
+      Handler: com.burskey.dailylife.task.api.TaskHandler::handleRequest_getTaskByID
       Policies:
         - DynamoDBReadPolicy:
             TableName: !Ref TaskTable
@@ -237,7 +237,7 @@ Resources:
           Type: Api
           Properties:
             RestApiId: !Ref BasicAWSApiGateway
-            Path: /party/task/{partyid}/{task_id}
+            Path: /party/task/{task_id}
             Method: get
 
 
@@ -246,7 +246,7 @@ Resources:
     Properties:
       CodeUri: target/lambda.zip
       FunctionName: TaskFindByPartyIDLambda
-      Handler: com.burskey.dailylife.task.api.TaskGetByPartyID::handleRequest
+      Handler: com.burskey.dailylife.task.api.TaskHandler::handleRequest_getByParty
       Policies:
         - DynamoDBReadPolicy:
             TableName: !Ref TaskTable
@@ -260,22 +260,24 @@ Resources:
 
 
 
-  TaskInProgressSaveLambda:
+  TaskStartLambda:
     Type: AWS::Serverless::Function
     Properties:
       CodeUri: target/lambda.zip
-      FunctionName: TaskInProgressSaveLambda
-      Handler: com.burskey.dailylife.task.api.TaskInProgressHandler::handleRequestSave
+      FunctionName: TaskStartLambda
+      Handler: com.burskey.dailylife.task.api.TaskHandler::handleRequest_Start
       Policies:
         - DynamoDBCrudPolicy:
             TableName: !Ref TaskInProgressTable
+        - DynamoDBReadPolicy:
+            TableName: !Ref TaskTable
       Events:
         ApiEvents:
           Type: Api
           Properties:
             RestApiId: !Ref BasicAWSApiGateway
-            Path: /party/tasksinprogress
-            Method: POST
+            Path: /party/task/{task_id}/start
+            Method: GET
 
 
 
@@ -284,7 +286,7 @@ Resources:
     Properties:
       CodeUri: target/lambda.zip
       FunctionName: TaskInProgressGetByTaskLambda
-      Handler: com.burskey.dailylife.task.api.TaskInProgressHandler::handleRequestGetByTask
+      Handler: com.burskey.dailylife.task.api.TaskInProgressHandler::handleRequest_GetByTask
       Policies:
         - DynamoDBReadPolicy:
             TableName: !Ref TaskInProgressTable
@@ -293,7 +295,7 @@ Resources:
           Type: Api
           Properties:
             RestApiId: !Ref BasicAWSApiGateway
-            Path: /party/task/{partyid}/{task_id}/tasksinprogress
+            Path: /party/task/{task_id}/tasksinprogress
             Method: GET
 
 
