@@ -43,22 +43,46 @@ public class DynamoServiceImpl implements TaskService {
 
 
     @Override
-    public Task getTask(String partyId, String id) {
+    public Task getTask( String id) {
         Task task = null;
 
-        GetItemSpec spec = new GetItemSpec();
-        spec.withPrimaryKey("id", id,"party_id", partyId);
-        System.out.println("Using table name: " + taskTableName);
-        final Table table = this.dynamoDB.getTable(this.taskTableName);
-        Item item = table.getItem(spec);
 
-        if (item != null) {
-            Map<String, Object> aMap = item.asMap();
-            String json = (String) aMap.get("details");
-            try {
-                task = mapper.readValue(json, SimpleTask.class);
-            } catch (JsonProcessingException e) {
-                throw new RuntimeException(e);
+        ValueMap valueMap = new ValueMap();
+        valueMap.withString(":taskID", id);
+
+        QuerySpec querySpec = new QuerySpec()
+                .withKeyConditionExpression("id = :taskID ")
+                .withValueMap(valueMap)
+                .withConsistentRead(true);
+//        GetItemSpec spec = new GetItemSpec();
+//        spec.withPrimaryKey("id", id);
+//        System.out.println("Using table name: " + taskTableName);
+//        final Table table = this.dynamoDB.getTable(this.taskTableName);
+//        Item item = table.getItem(spec);
+//
+//        if (item != null) {
+//            Map<String, Object> aMap = item.asMap();
+//            String json = (String) aMap.get("details");
+//            try {
+//                task = mapper.readValue(json, SimpleTask.class);
+//            } catch (JsonProcessingException e) {
+//                throw new RuntimeException(e);
+//            }
+//        }
+
+        ItemCollection<QueryOutcome> outcomes= this.dynamoDB.getTable(this.taskInProgressTableName).query(querySpec);
+
+        if (outcomes != null) {
+
+            for (Iterator iterator = outcomes.iterator(); iterator.hasNext();){
+                Item outcome = (Item) iterator.next();
+                String json = (String) outcome.get("details");
+
+                try {
+                    task = this.mapper.readValue(json, Task.class);
+                } catch (JsonProcessingException e) {
+                    throw new ServiceException("Encountered problem trying to rehydrate a task", e);
+                }
             }
         }
 
@@ -66,7 +90,7 @@ public class DynamoServiceImpl implements TaskService {
     }
 
     @Override
-    public Task[] getTasksByParty(String s) {
+    public Task[] getTasksByParty(String partyId) {
         return new Task[0];
     }
 
@@ -115,6 +139,8 @@ public class DynamoServiceImpl implements TaskService {
 
                 if (taskInProgress.getID() == null || taskInProgress.getID().isEmpty()) {
                     castTip.setId(UUID.randomUUID().toString());
+                    SimpleStatusPoint castStatusPoint = (SimpleStatusPoint) taskInProgress.getStatus();
+                    castStatusPoint.setId(UUID.randomUUID().toString());
                     String json = mapper.writeValueAsString(castTip);
                     final Item item = new Item()
                             .withPrimaryKey("id", taskInProgress.getID(), "task_id", taskInProgress.getTaskID())
@@ -149,7 +175,7 @@ public class DynamoServiceImpl implements TaskService {
     }
 
     @Override
-    public TaskInProgress[] getByTask(String partyId, String taskId) {
+    public TaskInProgress[] getByTask(String taskId) {
         List<TaskInProgress> aList = new ArrayList<>();
 
         ValueMap valueMap = new ValueMap();
@@ -189,5 +215,31 @@ public class DynamoServiceImpl implements TaskService {
     @Override
     public TaskInProgress[] getByParty(String partyId) {
         return new TaskInProgress[0];
+    }
+
+
+    @Override
+    public TaskInProgress start(Task task) {
+        throw new com.burskey.dailylife.task.service.ServiceException("Do not call", new NullPointerException());
+    }
+
+    @Override
+    public TaskInProgress changeTo(Task task, TaskInProgress taskInProgress, Status status) {
+        throw new com.burskey.dailylife.task.service.ServiceException("Do not call", new NullPointerException());
+    }
+
+    @Override
+    public TaskInProgress getTaskInProgress(String tipId) {
+        return null;
+    }
+
+    @Override
+    public TaskInProgress start(String s) {
+        throw new com.burskey.dailylife.task.service.ServiceException("Do not call", new NullPointerException());
+    }
+
+    @Override
+    public TaskInProgress changeTo(String s, String s1) {
+        throw new com.burskey.dailylife.task.service.ServiceException("Do not call", new NullPointerException());
     }
 }

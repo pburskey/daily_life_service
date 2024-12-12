@@ -20,7 +20,8 @@ public class TaskGetByID extends AbstractLambda {
         super(dao);
     }
 
-    public APIGatewayProxyResponseEvent handleRequest(APIGatewayProxyRequestEvent event, Context context) {
+//    public TaskInProgress changeTo(TaskInProgress tip, Status status);
+    public APIGatewayProxyResponseEvent handleRequest_changeStatus(APIGatewayProxyRequestEvent event, Context context) {
 
         LambdaLogger logger = context.getLogger();
         logger.log("Event Details:" + event);
@@ -33,7 +34,6 @@ public class TaskGetByID extends AbstractLambda {
             if (event != null && event.getPathParameters() != null) {
                 String taskId = event.getPathParameters().get("task_id");
                 String partyId = event.getPathParameters().get("partyid");
-//                String partyid = event.getPathParameters().get("party_id");
                 if (taskId == null || taskId.isEmpty()) {
                     response.setStatusCode(HttpStatus.SC_BAD_REQUEST);
                     response.setBody("Missing task id");
@@ -44,7 +44,7 @@ public class TaskGetByID extends AbstractLambda {
 
 
                     logger.log("Searching for task: " + taskId + " on party: " + partyId);
-                    Task task = this.getService().getTask(partyId, taskId);
+                    Task task = this.getService().getTask( taskId);
                     if (task != null) {
                         response.setBody(this.getMapper().writeValueAsString(task));
                     }

@@ -22,7 +22,7 @@ public class TaskInProgressHandler extends AbstractLambda {
     }
 
 
-    public APIGatewayProxyResponseEvent handleRequestGetByTask(APIGatewayProxyRequestEvent event, Context context) {
+    public APIGatewayProxyResponseEvent handleRequest_GetByTask(APIGatewayProxyRequestEvent event, Context context) {
 
         LambdaLogger logger = context.getLogger();
         logger.log("Event Details:" + event);
@@ -33,19 +33,15 @@ public class TaskInProgressHandler extends AbstractLambda {
         try {
 
             if (event != null && event.getPathParameters() != null) {
-                String partyId = event.getPathParameters().get("partyid");
                 String taskId = event.getPathParameters().get("task_id");
-                if (partyId == null || partyId.isEmpty()) {
-                    response.setStatusCode(HttpStatus.SC_BAD_REQUEST);
-                    response.setBody("Missing party id");
-                } else if (taskId == null || taskId.isEmpty()) {
+                if (taskId == null || taskId.isEmpty()) {
                     response.setStatusCode(HttpStatus.SC_BAD_REQUEST);
                     response.setBody("Missing task id");
                 } else {
 
 
-                    logger.log("Searching for tasks in progress on party: " + partyId + " for task: " + taskId);
-                    TaskInProgress[] tips = this.getService().getByTask(partyId, taskId);
+                    logger.log("Searching for tasks in progress for task: " + taskId);
+                    TaskInProgress[] tips = this.getService().getByTask( taskId);
                     if (tips != null) {
                         response.setBody(this.getMapper().writeValueAsString(tips));
                     }
@@ -63,7 +59,9 @@ public class TaskInProgressHandler extends AbstractLambda {
 
     }
 
-    public APIGatewayProxyResponseEvent handleRequestSave(APIGatewayProxyRequestEvent event, Context context) {
+
+//    public TaskInProgress start(Task task);
+    public APIGatewayProxyResponseEvent handleRequest_Start(APIGatewayProxyRequestEvent event, Context context) {
 
         LambdaLogger logger = context.getLogger();
         logger.log("Event Details:" + event);
@@ -73,20 +71,21 @@ public class TaskInProgressHandler extends AbstractLambda {
         response.setStatusCode(200);
         try {
 
-            if (event != null && event.getBody() != null && !event.getBody().isEmpty()) {
-                TaskInProgress tip = this.getMapper().readValue(event.getBody(), TaskInProgress.class);
-
-                if (tip == null ) {
+            if (event != null && event.getPathParameters() != null) {
+                String taskId = event.getPathParameters().get("task_id");
+                 if (taskId == null || taskId.isEmpty()) {
                     response.setStatusCode(HttpStatus.SC_BAD_REQUEST);
-                    response.setBody("Missing task in progress");
+                    response.setBody("Missing task id");
                 } else {
-                    logger.log("Saving task in progress: ");
-                    tip = this.getService().saveTaskInProgress(tip);
+
+
+                    logger.log("starting task: " + taskId);
+                    TaskInProgress tip = this.getService().start(taskId);
                     if (tip != null) {
                         response.setBody(this.getMapper().writeValueAsString(tip));
                     }
-
                 }
+
             }
 
         }
