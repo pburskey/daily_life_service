@@ -33,7 +33,7 @@ public class TaskHandler extends AbstractLambda {
         try {
 
             if (event != null && event.getBody() != null && !event.getBody().isEmpty()) {
-                Task task = this.getMapper().readValue(event.getBody(), SimpleTask.class);
+                Task task = this.getMapper().readValue(event.getBody(), Task.class);
 
                 if (task == null ) {
                     response.setStatusCode(HttpStatus.SC_BAD_REQUEST);
@@ -45,6 +45,7 @@ public class TaskHandler extends AbstractLambda {
                     task = this.getService().saveTask(task);
                     if (task != null) {
                         response.setBody(this.getMapper().writeValueAsString(task));
+                        logger.log("Completed saving task: " + task.getId());
                     }
 
                 }
@@ -164,7 +165,6 @@ public class TaskHandler extends AbstractLambda {
                     response.setStatusCode(HttpStatus.SC_BAD_REQUEST);
                     response.setBody("Missing task id");
                 } else {
-
 
                     logger.log("starting task: " + taskId);
                     TaskInProgress tip = this.getService().start(taskId);

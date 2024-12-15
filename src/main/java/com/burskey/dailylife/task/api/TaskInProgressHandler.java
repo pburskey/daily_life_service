@@ -60,5 +60,45 @@ public class TaskInProgressHandler extends AbstractLambda {
     }
 
 
+    public APIGatewayProxyResponseEvent handleRequest_changeStatus(APIGatewayProxyRequestEvent event, Context context) {
+
+        LambdaLogger logger = context.getLogger();
+        logger.log("Event Details:" + event);
+
+        APIGatewayProxyResponseEvent response = new APIGatewayProxyResponseEvent();
+        response.setIsBase64Encoded(false);
+        response.setStatusCode(200);
+        try {
+
+            if (event != null && event.getPathParameters() != null) {
+                String tipId = event.getPathParameters().get("tip_id");
+                String statusId = event.getPathParameters().get("status_id");
+                if (tipId == null || tipId.isEmpty()) {
+                    response.setStatusCode(HttpStatus.SC_BAD_REQUEST);
+                    response.setBody("Missing task in progress id");
+                } else if (statusId == null || statusId.isEmpty()) {
+                    response.setStatusCode(HttpStatus.SC_BAD_REQUEST);
+                    response.setBody("Missing status id");
+                } else {
+
+
+                    logger.log("Attempting to change status of task in progress: " + tipId + " to status id: " + statusId);
+                    TaskInProgress tip = this.getService().changeTo(tipId, statusId);
+                    if (tip != null) {
+                        response.setBody(this.getMapper().writeValueAsString(tip));
+                    }
+                }
+
+            }
+
+        } catch (Exception e) {
+            logger.log(e.getMessage());
+            response.setBody(e.getMessage());
+            response.setStatusCode(HttpStatus.SC_INTERNAL_SERVER_ERROR);
+        }
+
+        return response;
+
+    }
 
 }

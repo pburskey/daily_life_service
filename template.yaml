@@ -26,9 +26,10 @@ Globals:
   Function:
     Runtime: java17
     MemorySize: 512
-    Timeout: 3
+    Timeout: 15
     Environment:
       Variables:
+        ASSOCIATION_TABLE: !Ref AssociationTable
         PARTY_TABLE: !Ref PartyTable
         COMMUNICATION_TABLE: !Ref CommunicationTable
         TASK_TABLE: !Ref TaskTable
@@ -36,6 +37,28 @@ Globals:
         STAGE: !Ref Stage
 
 Resources:
+
+
+  AssociationTable:
+    Type: AWS::DynamoDB::Table
+    Properties:
+      ProvisionedThroughput:
+        ReadCapacityUnits: '1'
+        WriteCapacityUnits: '1'
+      AttributeDefinitions:
+        - AttributeName: "from_id"
+          AttributeType: "S"
+        - AttributeName: "to_id"
+          AttributeType: "S"
+      KeySchema:
+        - AttributeName: "from_id"
+          KeyType: "HASH"
+        - AttributeName: "to_id"
+          KeyType: "RANGE"
+
+
+
+
   PartyTable:
     Type: AWS::DynamoDB::Table
     Properties:
@@ -77,13 +100,9 @@ Resources:
       AttributeDefinitions:
         - AttributeName: "id"
           AttributeType: "S"
-        - AttributeName: "party_id"
-          AttributeType: "S"
       KeySchema:
-        - AttributeName: "party_id"
-          KeyType: "HASH"
         - AttributeName: "id"
-          KeyType: "RANGE"
+          KeyType: "HASH"
 
 
   TaskInProgressTable:
@@ -95,13 +114,9 @@ Resources:
       AttributeDefinitions:
         - AttributeName: "id"
           AttributeType: "S"
-        - AttributeName: "task_id"
-          AttributeType: "S"
       KeySchema:
-        - AttributeName: "task_id"
-          KeyType: "HASH"
         - AttributeName: "id"
-          KeyType: "RANGE"
+          KeyType: "HASH"
 
 
 
@@ -214,6 +229,8 @@ Resources:
       Policies:
         - DynamoDBCrudPolicy:
             TableName: !Ref TaskTable
+        - DynamoDBCrudPolicy:
+            TableName: !Ref AssociationTable
       Events:
         ApiEvents:
           Type: Api
@@ -250,6 +267,8 @@ Resources:
       Policies:
         - DynamoDBReadPolicy:
             TableName: !Ref TaskTable
+        - DynamoDBReadPolicy:
+            TableName: !Ref AssociationTable
       Events:
         ApiEvent:
           Type: Api
@@ -290,12 +309,35 @@ Resources:
       Policies:
         - DynamoDBReadPolicy:
             TableName: !Ref TaskInProgressTable
+        - DynamoDBReadPolicy:
+            TableName: !Ref AssociationTable
       Events:
         ApiEvents:
           Type: Api
           Properties:
             RestApiId: !Ref BasicAWSApiGateway
             Path: /party/task/{task_id}/tasksinprogress
+            Method: GET
+
+
+
+  TaskInProgressChangeStatusLambda:
+    Type: AWS::Serverless::Function
+    Properties:
+      CodeUri: target/lambda.zip
+      FunctionName: TaskInProgressChangeStatusLambda
+      Handler: com.burskey.dailylife.task.api.TaskInProgressHandler::handleRequest_changeStatus
+      Policies:
+        - DynamoDBCrudPolicy:
+            TableName: !Ref TaskInProgressTable
+        - DynamoDBReadPolicy:
+            TableName: !Ref TaskTable
+      Events:
+        ApiEvents:
+          Type: Api
+          Properties:
+            RestApiId: !Ref BasicAWSApiGateway
+            Path: /party/taskinprogress/{tip_id}/changeTo/{status_id}
             Method: GET
 
 

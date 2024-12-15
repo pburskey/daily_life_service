@@ -9,6 +9,7 @@ import com.amazonaws.services.dynamodbv2.document.utils.ValueMap;
 import com.amazonaws.services.dynamodbv2.model.AttributeValue;
 import com.amazonaws.services.dynamodbv2.model.UpdateItemRequest;
 import com.amazonaws.services.dynamodbv2.model.UpdateItemResult;
+import com.burskey.dailylife.dynamodb.AssociationService;
 import com.burskey.dailylife.party.domain.Communication;
 import com.burskey.dailylife.party.service.ServiceException;
 import com.burskey.dailylife.task.domain.*;
@@ -32,57 +33,36 @@ public class DynamoServiceImpl implements TaskService {
             .configure(SerializationFeature.WRITE_DATES_AS_TIMESTAMPS, true)
             .setSerializationInclusion(JsonInclude.Include.NON_NULL);
 
-    private String taskTableName;
-    private String taskInProgressTableName;
+    final Table taskTable;
+    final Table taskInProgressTable;
+    private AssociationService associationService;
 
-
-    public DynamoServiceImpl(String ataskTableName, String atipTableName) {
-        this.taskTableName = ataskTableName;
-        this.taskInProgressTableName = atipTableName;
+    public DynamoServiceImpl(AssociationService anAssociationService, String ataskTableName, String atipTableName) {
+        this.taskTable = this.dynamoDB.getTable(ataskTableName);
+        this.taskInProgressTable = this.dynamoDB.getTable(atipTableName);
+        this.associationService = anAssociationService;
     }
 
 
     @Override
-    public Task getTask( String id) {
+    public Task getTask(String id) {
         Task task = null;
 
         System.out.println("Getting task: " + id);
-        ValueMap valueMap = new ValueMap();
-        valueMap.withString(":taskID", id);
 
-        QuerySpec querySpec = new QuerySpec()
-                .withKeyConditionExpression("id = :taskID ")
-                .withValueMap(valueMap)
-                .withConsistentRead(true);
-//        GetItemSpec spec = new GetItemSpec();
-//        spec.withPrimaryKey("id", id);
-//        System.out.println("Using table name: " + taskTableName);
-//        final Table table = this.dynamoDB.getTable(this.taskTableName);
-//        Item item = table.getItem(spec);
-//
-//        if (item != null) {
-//            Map<String, Object> aMap = item.asMap();
-//            String json = (String) aMap.get("details");
-//            try {
-//                task = mapper.readValue(json, SimpleTask.class);
-//            } catch (JsonProcessingException e) {
-//                throw new RuntimeException(e);
-//            }
-//        }
+        GetItemSpec spec = new GetItemSpec();
+        spec.withPrimaryKey("id", id);
 
-        ItemCollection<QueryOutcome> outcomes= this.dynamoDB.getTable(this.taskTableName).query(querySpec);
 
-        if (outcomes != null) {
+        Item item = taskTable.getItem(spec);
 
-            for (Iterator iterator = outcomes.iterator(); iterator.hasNext();){
-                Item outcome = (Item) iterator.next();
-                String json = (String) outcome.get("details");
-
-                try {
-                    task = this.mapper.readValue(json, Task.class);
-                } catch (JsonProcessingException e) {
-                    throw new ServiceException("Encountered problem trying to rehydrate a task", e);
-                }
+        if (item != null) {
+            Map<String, Object> aMap = item.asMap();
+            String json = (String) aMap.get("details");
+            try {
+                task = mapper.readValue(json, Task.class);
+            } catch (JsonProcessingException e) {
+                throw new RuntimeException(e);
             }
         }
         System.out.println("Completed Getting task: " + id);
@@ -91,7 +71,28 @@ public class DynamoServiceImpl implements TaskService {
 
     @Override
     public Task[] getTasksByParty(String partyId) {
-        return new Task[0];
+
+        String[] ids = this.associationService.getAssociatedFrom(partyId);
+        List<Task> aList = new ArrayList<>();
+        Task[] tasks = null;
+        if (ids != null && ids.length > 0) {
+            for (int i = 0; i < ids.length; i++) {
+                String id = ids[i];
+                Task task = this.getTask(id);
+                if (task != null) {
+                    aList.add(task);
+                } else {
+                    System.err.println("Could not find task: " + id);
+                }
+            }
+
+            if (aList != null && aList.size() > 0) {
+                tasks = aList.toArray(new Task[aList.size()]);
+            }
+
+        }
+
+        return tasks;
     }
 
     @Override
@@ -102,24 +103,28 @@ public class DynamoServiceImpl implements TaskService {
 
                 if (task.getId() == null || task.getId().isEmpty()) {
                     castTask.setId(UUID.randomUUID().toString());
-                    System.out.println("Inserting new Task: " + castTask.getId());
+
                     String json = mapper.writeValueAsString(task);
+                    System.out.println("Inserting new Task: " + castTask.getId());
                     final Item item = new Item()
-                            .withPrimaryKey("id", task.getId(), "party_id", task.getPartyID())
+                            .withPrimaryKey("id", task.getId())
                             .withString("details", json);
 
-                    final Table table = this.dynamoDB.getTable(this.taskTableName);
-                    table.putItem(item);
+
+                    taskTable.putItem(item);
+                    System.out.println("Inserted new Task: " + castTask.getId());
+                    this.associationService.associate(task.getPartyID(), task.getId());
+
+
                     System.out.println("Completed insertion of Task: " + castTask.getId());
 
                 } else {
                     String json = mapper.writeValueAsString(task);
                     UpdateItemRequest updateItemRequest = new UpdateItemRequest();
-                    updateItemRequest.setTableName(this.taskTableName);
+                    updateItemRequest.setTableName(this.taskTable.getTableName());
                     updateItemRequest.addKeyEntry("id", new AttributeValue().withS(task.getId()));
                     updateItemRequest.addExpressionAttributeValuesEntry(":details", new AttributeValue().withS(json));
-                    updateItemRequest.addExpressionAttributeValuesEntry(":partyID", new AttributeValue().withS(task.getPartyID()));
-                    updateItemRequest.withUpdateExpression("set details = :details, party_id = :partyID");
+                    updateItemRequest.withUpdateExpression("set details = :details");
 
                     UpdateItemResult result = this.client.updateItem(updateItemRequest);
 
@@ -140,25 +145,30 @@ public class DynamoServiceImpl implements TaskService {
                 SimpleTaskInProgress castTip = (SimpleTaskInProgress) taskInProgress;
 
                 if (taskInProgress.getID() == null || taskInProgress.getID().isEmpty()) {
+
                     castTip.setId(UUID.randomUUID().toString());
+                    System.out.println("Inserting a task in progress: " + taskInProgress.getID());
                     SimpleStatusPoint castStatusPoint = (SimpleStatusPoint) taskInProgress.getStatus();
                     castStatusPoint.setId(UUID.randomUUID().toString());
                     String json = mapper.writeValueAsString(castTip);
                     final Item item = new Item()
-                            .withPrimaryKey("id", taskInProgress.getID(), "task_id", taskInProgress.getTaskID())
+                            .withPrimaryKey("id", taskInProgress.getID())
                             .withString("details", json);
 
-                    final Table table = this.dynamoDB.getTable(this.taskInProgressTableName);
-                    table.putItem(item);
+
+                    this.taskInProgressTable.putItem(item);
+                    System.out.println("Completed insertion of task in progress: " + taskInProgress.getID());
+
+                    this.associationService.associate(taskInProgress.getTaskID(), taskInProgress.getID());
+
 
                 } else {
                     String json = mapper.writeValueAsString(taskInProgress);
                     UpdateItemRequest updateItemRequest = new UpdateItemRequest();
-                    updateItemRequest.setTableName(this.taskInProgressTableName);
+                    updateItemRequest.setTableName(this.taskInProgressTable.getTableName());
                     updateItemRequest.addKeyEntry("id", new AttributeValue().withS(taskInProgress.getID()));
                     updateItemRequest.addExpressionAttributeValuesEntry(":details", new AttributeValue().withS(json));
-                    updateItemRequest.addExpressionAttributeValuesEntry(":task_id", new AttributeValue().withS(taskInProgress.getTaskID()));
-                    updateItemRequest.withUpdateExpression("set details = :details, task_id = :task_id");
+                    updateItemRequest.withUpdateExpression("set details = :details");
 
                     UpdateItemResult result = this.client.updateItem(updateItemRequest);
 
@@ -179,40 +189,31 @@ public class DynamoServiceImpl implements TaskService {
     @Override
     public TaskInProgress[] getByTask(String taskId) {
         List<TaskInProgress> aList = new ArrayList<>();
-
-        ValueMap valueMap = new ValueMap();
-        valueMap.withString(":taskID", taskId);
-
-
-        QuerySpec querySpec = new QuerySpec()
-                .withKeyConditionExpression("task_id = :taskID ")
-                .withValueMap(valueMap)
-                .withConsistentRead(true);
-
-        ItemCollection<QueryOutcome> outcomes= this.dynamoDB.getTable(this.taskInProgressTableName).query(querySpec);
-
-        if (outcomes != null) {
-
-            for (Iterator iterator = outcomes.iterator(); iterator.hasNext();){
-                Item outcome = (Item) iterator.next();
-                String json = (String) outcome.get("details");
-                TaskInProgress aTip = null;
-                try {
-                    aTip = this.mapper.readValue(json, TaskInProgress.class);
-                } catch (JsonProcessingException e) {
-                    throw new ServiceException("Encountered problem trying to rehydrate a task in progress", e);
-                }
-
-                aList.add(aTip);
-            }
-        }
+        String[] ids = this.associationService.getAssociatedFrom(taskId);
 
         TaskInProgress[] tips = null;
-        if (aList != null && aList.size() > 0) {
-            tips = aList.toArray(new TaskInProgress[aList.size()]);
+        if (ids != null && ids.length > 0) {
+            System.out.println("Found: " + ids.length + " associated task in progress ids for task: " + taskId);
+            for (int i = 0; i < ids.length; i++) {
+                String id = ids[i];
+                TaskInProgress tip = this.getTaskInProgress(id);
+                if (tip != null) {
+                    aList.add(tip);
+                } else {
+                    System.err.println("Could not find task in progress: " + id);
+                }
+            }
+
+            if (aList != null && aList.size() > 0) {
+                tips = aList.toArray(new TaskInProgress[aList.size()]);
+            }
+
         }
+
+
         return tips;
     }
+
 
     @Override
     public TaskInProgress[] getByParty(String partyId) {
@@ -232,7 +233,27 @@ public class DynamoServiceImpl implements TaskService {
 
     @Override
     public TaskInProgress getTaskInProgress(String tipId) {
-        return null;
+        TaskInProgress tip = null;
+
+        System.out.println("Getting task in progress: " + tipId);
+
+        GetItemSpec spec = new GetItemSpec();
+        spec.withPrimaryKey("id", tipId);
+
+
+        Item item = taskInProgressTable.getItem(spec);
+
+        if (item != null) {
+            Map<String, Object> aMap = item.asMap();
+            String json = (String) aMap.get("details");
+            try {
+                tip = mapper.readValue(json, TaskInProgress.class);
+            } catch (JsonProcessingException e) {
+                throw new RuntimeException(e);
+            }
+        }
+        System.out.println("Completed Getting task in progress: " + tipId);
+        return tip;
     }
 
     @Override
