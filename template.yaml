@@ -290,6 +290,8 @@ Resources:
             TableName: !Ref TaskInProgressTable
         - DynamoDBReadPolicy:
             TableName: !Ref TaskTable
+        - DynamoDBCrudPolicy:
+            TableName: !Ref AssociationTable
       Events:
         ApiEvents:
           Type: Api
