@@ -19,7 +19,7 @@ import com.fasterxml.jackson.core.JsonProcessingException;
 import com.fasterxml.jackson.databind.DeserializationFeature;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import com.fasterxml.jackson.databind.SerializationFeature;
-import org.springframework.stereotype.Service;
+
 
 import java.util.*;
 
@@ -34,13 +34,13 @@ public class DynamoServiceImpl implements PartyService {
             .configure(SerializationFeature.WRITE_DATES_AS_TIMESTAMPS, true)
             .setSerializationInclusion(JsonInclude.Include.NON_NULL);
 
-    private String partyTableName;
-    private String communicationTableName;
+    private final Table partyTable;
+    private final Table communicationTable;
 
 
     public DynamoServiceImpl(String partyTableName, String communicationTableName) {
-        this.partyTableName = partyTableName;
-        this.communicationTableName = communicationTableName;
+        this.partyTable = dynamoDB.getTable(partyTableName);
+        this.communicationTable = dynamoDB.getTable(communicationTableName);
     }
 
     @Override
@@ -49,7 +49,7 @@ public class DynamoServiceImpl implements PartyService {
 
         GetItemSpec spec = new GetItemSpec();
         spec.withPrimaryKey("id", partyId);
-        final Table table = this.dynamoDB.getTable(this.partyTableName);
+        final Table table = this.partyTable;
         Item item = table.getItem(spec);
 
         if (item != null) {
@@ -79,14 +79,14 @@ public class DynamoServiceImpl implements PartyService {
                             .withPrimaryKey("id", party.getId())
                             .withString("details", json);
 
-                    final Table table = this.dynamoDB.getTable(this.partyTableName);
+                    final Table table = this.partyTable;
                     table.putItem(item);
 
                 } else {
                     String json = mapper.writeValueAsString(party);
                     Person person = (Person) party;
                     UpdateItemRequest updateItemRequest = new UpdateItemRequest();
-                    updateItemRequest.setTableName(this.partyTableName);
+                    updateItemRequest.setTableName(this.partyTable.getTableName());
                     updateItemRequest.addKeyEntry("id", new AttributeValue().withS(party.getId()));
                     updateItemRequest.addExpressionAttributeValuesEntry(":details", new AttributeValue().withS(json));
                     updateItemRequest.withUpdateExpression("set details = :details");
@@ -109,7 +109,7 @@ public class DynamoServiceImpl implements PartyService {
         GetItemSpec spec = new GetItemSpec();
         spec.withPrimaryKey("id", communicationID,"party_id", partyId);
 
-        final Table table = this.dynamoDB.getTable(this.communicationTableName);
+        final Table table = this.communicationTable;
         Item item = table.getItem(spec);
 
         if (item != null) {
@@ -137,13 +137,13 @@ public class DynamoServiceImpl implements PartyService {
                             .withPrimaryKey("id", communication.getId(),"party_id", communication.getPartyID())
                             .withString("details", json);
 
-                    final Table table = this.dynamoDB.getTable(this.communicationTableName);
+                    final Table table = this.communicationTable;
                     table.putItem(item);
 
                 } else {
                     String json = mapper.writeValueAsString(communication);
                     UpdateItemRequest updateItemRequest = new UpdateItemRequest();
-                    updateItemRequest.setTableName(this.communicationTableName);
+                    updateItemRequest.setTableName(this.communicationTable.getTableName());
                     updateItemRequest.addKeyEntry("id", new AttributeValue().withS(communication.getId()));
                     updateItemRequest.addExpressionAttributeValuesEntry(":details", new AttributeValue().withS(json));
                     updateItemRequest.addExpressionAttributeValuesEntry(":partyID", new AttributeValue().withS(communication.getPartyID()));
@@ -174,7 +174,7 @@ public class DynamoServiceImpl implements PartyService {
                 .withValueMap(valueMap)
                 .withConsistentRead(true);
 
-        ItemCollection<QueryOutcome> outcomes= this.dynamoDB.getTable(this.communicationTableName).query(querySpec);
+        ItemCollection<QueryOutcome> outcomes= this.communicationTable.query(querySpec);
 
         if (outcomes != null) {
 
